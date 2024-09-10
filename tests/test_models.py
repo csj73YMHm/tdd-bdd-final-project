@@ -27,7 +27,7 @@ import os
 import logging
 import unittest
 from decimal import Decimal
-from service.models import Product, Category, db
+from service.models import Product, Category, db, DataValidationError
 from service import app
 from tests.factories import ProductFactory
 
@@ -70,6 +70,34 @@ class TestProductModel(unittest.TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
+    def test_deserilization_with_invalid_available(self):
+        """ some docstring """
+        product = ProductFactory()
+        returned_dict = product.serialize()
+        returned_dict["available"] = "hello world"
+        returned_product = Product()
+        self.assertRaises(DataValidationError, returned_product.deserialize, returned_dict)
+
+
+    def test_deserialization_with_invalid_attribute(self):
+        """ some docstring """
+        returned_dict = {
+            "id": 100,
+            "name": "Hello world",
+            "description": "example description",
+            "price": 1234.50,
+            "available": True,
+            "category": "DOG"  # convert enum to string
+        }
+        returned_product = Product()
+        self.assertRaises(DataValidationError, returned_product.deserialize, returned_dict)
+
+    def test_deserilization_with_invalid_type(self):
+        """ some docstring """
+        returned_dict = "Hello world"
+        returned_product = Product()
+        self.assertRaises(DataValidationError, returned_product.deserialize, returned_dict)
+
     def test_create_a_product(self):
         """It should Create a product and assert that it exists"""
         product = Product(name="Fedora", description="A red hat", price=12.50, available=True, category=Category.CLOTHS)
@@ -101,6 +129,121 @@ class TestProductModel(unittest.TestCase):
         self.assertEqual(new_product.available, product.available)
         self.assertEqual(new_product.category, product.category)
 
-    #
-    # ADD YOUR TEST CASES HERE
-    #
+    def test_read_a_product(self):
+        """ some docstring """
+        product = ProductFactory()
+        product.id = None
+        product.create()
+        self.assertIsNotNone(product.id)
+        # Fetch product
+        found_product = Product.find(product.id)
+        self.assertEqual(found_product.id, product.id)
+        self.assertEqual(found_product.name, product.name)
+        self.assertEqual(found_product.description, product.description)
+        self.assertEqual(found_product.price, product.price)
+
+    def test_update_a_product(self):
+        """ some docstring """
+        product = ProductFactory()
+        product.id = None
+        product.create()
+        self.assertIsNotNone(product.id)
+        original_id = product.id
+        product.description = "..."
+        product.update()
+        self.assertEqual(product.id, original_id)
+        self.assertIn("...", product.description)
+        products = Product.all()
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].id, original_id)
+        self.assertEqual(products[0].description, "...")
+
+    def test_update_with_invalid_id(self):
+        """ some docstring """
+        product = ProductFactory()
+        product.id = None
+        product.create()
+        self.assertIsNotNone(product.id)
+        product.id = None
+        product.description = "..."
+        self.assertRaises(DataValidationError, product.update)
+
+    def test_delete_a_product(self):
+        """ some docstring """
+        product = ProductFactory()
+        product.id = None
+        product.create()
+        self.assertIsNotNone(product.id)
+        products = Product.all()
+        self.assertEqual(len(products), 1)
+        product.delete()
+        products = Product.all()
+        self.assertEqual(len(products), 0)
+
+
+    def test_list_products(self):
+        """ some docstring """
+        products = Product.all()
+        self.assertEqual(len(products), 0)
+        for _ in range(0, 5):
+            product = ProductFactory()
+            product.id = None
+            product.create()
+            self.assertIsNotNone(product.id)
+        products = Product.all()
+        self.assertEqual(len(products), 5)
+
+    def test_find_a_product_by_name(self):
+        """ some docstring """
+        products = ProductFactory.create_batch(5)
+        for product in products:
+            product.create()
+        tmp_name = products[0].name
+        tmp_count = len([product for product in products if product.name == tmp_name])
+        products_with_the_name = Product.find_by_name(tmp_name)
+        length_of_products_with_the_name = products_with_the_name.count()
+        self.assertEqual(length_of_products_with_the_name, tmp_count)
+        for product in products_with_the_name:
+            self.assertEqual(product.name, tmp_name)
+            
+    def test_find_by_availability(self):
+        """ some docstring """
+        products = ProductFactory.create_batch(10)
+        for product in products:
+            product.create()
+        available = products[0].available
+        count = len([product for product in products if product.available == available])
+        found = Product.find_by_availability(available)
+        self.assertEqual(found.count(), count)
+        for product in found:
+            self.assertEqual(product.available, available)
+
+    def test_find_by_category(self):
+        """ some docstring """
+        products = ProductFactory.create_batch(10)
+        for product in products:
+            product.create()
+        category = products[0].category
+        tmp_count = 0
+        for product in products:
+            if product.category == category:
+                tmp_count += 1
+        products_with_that_category = Product.find_by_category(category)
+        count_of_products_with_that_category = products_with_that_category.count()
+        self.assertEqual(count_of_products_with_that_category, tmp_count)
+        for product in products_with_that_category:
+            self.assertEqual(product.category, category)
+
+    def test_find_by_price(self):
+        """ some docstring """
+        for _ in range(0, 10):
+            product = ProductFactory()
+            product.id = None
+            product.create()
+            self.assertIsNotNone(product.id)
+        products = Product.all()
+        price = products[0].price
+        tmp_count = len([product for product in products if product.price == price])
+        products_with_that_price = Product.find_by_price(price)
+        count_of_products_with_that_price = products_with_that_price.count()
+        self.assertEqual(count_of_products_with_that_price, tmp_count)                                                                                                                                           
